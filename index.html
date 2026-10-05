@@ -171,10 +171,10 @@ input:focus,select:focus{outline:none;box-shadow:0 0 0 3px rgba(99,102,241,.15);
 "use strict";
 const $ = id => document.getElementById(id);
 const CATS = {
- expense:["Master Salary","Helper Salary","Counter Cashier Salary","Cleaning Salary","Groceries PatnamBazar","Oil&etc","Chicken","Vegetables","Prawns"],
+ expense:["Master Salary","Helper Salary","Counter Cashier Salary","Cleaning Salary","Groceries PatnamBazar","Oil&etc","Chicken","Vegetables","Prawns","Curd","Gas","Staff Curry","Pending","Rent","Electricity Bill","Water","Packing Material","Transport","Repairs","Miscellaneous"],
  income:["Counter Amount"]
 };
-const TE = {"Master Salary":"మాస్టర్ జీతం","Helper Salary":"హెల్పర్ జీతం","Counter Cashier Salary":"కౌంటర్ క్యాషియర్ జీతం","Cleaning Salary":"క్లీనింగ్ జీతం","Groceries PatnamBazar":"కిరాణా పట్నం బజార్","Oil&etc":"నూనె & ఇతరాలు","Chicken":"చికెన్","Vegetables":"కూరగాయలు","Prawns":"రొయ్యలు","Counter Amount":"కౌంటర్ అమౌంట్"};
+const TE = {"Master Salary":"మాస్టర్ జీతం","Helper Salary":"హెల్పర్ జీతం","Counter Cashier Salary":"కౌంటర్ క్యాషియర్ జీతం","Cleaning Salary":"క్లీనింగ్ జీతం","Groceries PatnamBazar":"కిరాణా పట్నం బజార్","Oil&etc":"నూనె & ఇతరాలు","Chicken":"చికెన్","Vegetables":"కూరగాయలు","Prawns":"రొయ్యలు","Counter Amount":"కౌంటర్ అమౌంట్","Curd":"పెరుగు","Gas":"గ్యాస్","Staff Curry":"స్టాఫ్ కూర","Pending":"పెండింగ్","Rent":"అద్దె","Electricity Bill":"కరెంట్ బిల్లు","Water":"నీళ్ళు","Packing Material":"ప్యాకింగ్ సామగ్రి","Transport":"రవాణా","Repairs":"రిపేర్లు","Miscellaneous":"ఇతర ఖర్చులు"};
 const KEY = "dailytracker_pro_ledger";
 const LSget=k=>{try{return localStorage.getItem(k)}catch{return null}};
 const LSset=(k,v)=>{try{localStorage.setItem(k,v);return true}catch{return false}};
@@ -483,7 +483,7 @@ function renderCharts(){
  if(typeof Chart==="undefined")return;
  const dark=document.documentElement.classList.contains("dark");Chart.defaults.color=dark?"#cbd5e1":"#475569";Chart.defaults.borderColor=dark?"#334155":"#e2e8f0";
  if(!charts.cat){
-  charts.cat=new Chart($("categoryChart"),{type:"doughnut",data:{labels:[],datasets:[{data:[],backgroundColor:["#6366f1","#f43f5e","#10b981","#f59e0b","#06b6d4","#8b5cf6","#ec4899","#84cc16","#64748b"],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"bottom",labels:{boxWidth:10,font:{size:10}}}}}});
+  charts.cat=new Chart($("categoryChart"),{type:"doughnut",data:{labels:[],datasets:[{data:[],backgroundColor:["#6366f1","#f43f5e","#10b981","#f59e0b","#06b6d4","#8b5cf6","#ec4899","#84cc16","#64748b","#ea580c","#0d9488","#a855f7","#e11d48","#2563eb","#ca8a04","#14b8a6","#7c3aed","#db2777"],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"bottom",labels:{boxWidth:10,font:{size:10}}}}}});
   charts.month=new Chart($("monthlyChart"),{type:"bar",data:{labels:[],datasets:[{label:"Income",data:[],backgroundColor:"#10b981"},{label:"Expense",data:[],backgroundColor:"#f43f5e"}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true}},plugins:{legend:{position:"bottom",labels:{font:{size:10}}}}}});
  }
  const cats={};tx.filter(x=>x.type==="expense").forEach(x=>cats[x.category]=(cats[x.category]||0)+Number(x.amount));
