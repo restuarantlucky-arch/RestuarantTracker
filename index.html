@@ -151,7 +151,7 @@ input:focus,select:focus{outline:none;box-shadow:0 0 0 3px rgba(99,102,241,.15);
 
 <!-- Share modal -->
 <div id="shareModal" class="modal fixed inset-0 z-50 grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm" role="dialog">
- <div class="modal-card w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl dark:bg-slate-900"><div class="mb-5 flex items-center justify-between"><h3 class="text-lg font-extrabold">Ledger</h3><button data-close="shareModal" class="grid h-9 w-9 place-items-center rounded-xl bg-slate-100 dark:bg-slate-800">×</button></div><label class="mb-1 block text-xs font-bold">Current Ledger Code</label><div class="flex gap-2"><input id="ledgerInput" readonly class="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-950"><button id="copyLedger" class="rounded-xl bg-indigo-600 px-3 text-xs font-bold text-white">Copy</button></div><div class="my-5 border-t border-slate-100 dark:border-slate-800"></div><label class="mb-1 block text-xs font-bold">Switch local ledger</label><div class="flex gap-2"><input id="joinInput" class="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-950" placeholder="ledger_xxxxxx"><button id="joinLedger" class="rounded-xl bg-emerald-600 px-3 text-xs font-bold text-white">Open</button></div><div id="savedLedgers" class="mt-3 flex flex-wrap gap-2"></div><button id="newLedger" class="mt-4 w-full rounded-xl border border-slate-200 py-2.5 text-xs font-bold dark:border-slate-700">＋ New personal ledger</button></div>
+ <div class="modal-card w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl dark:bg-slate-900"><div class="mb-5 flex items-center justify-between"><h3 class="text-lg font-extrabold">Ledger</h3><button data-close="shareModal" class="grid h-9 w-9 place-items-center rounded-xl bg-slate-100 dark:bg-slate-800">×</button></div><label class="mb-1 block text-xs font-bold">Current Ledger Code</label><div class="flex gap-2"><input id="ledgerInput" readonly class="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-950"><button id="copyLedger" class="rounded-xl bg-indigo-600 px-3 text-xs font-bold text-white">Copy</button><button id="copyLink" class="rounded-xl bg-sky-600 px-3 text-xs font-bold text-white">Link</button></div><p id="cloudStatus" class="mt-2 text-[10px] opacity-70"></p><div class="my-5 border-t border-slate-100 dark:border-slate-800"></div><label class="mb-1 block text-xs font-bold">Switch local ledger</label><div class="flex gap-2"><input id="joinInput" class="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-950" placeholder="ledger_xxxxxx"><button id="joinLedger" class="rounded-xl bg-emerald-600 px-3 text-xs font-bold text-white">Open</button></div><div id="savedLedgers" class="mt-3 flex flex-wrap gap-2"></div><button id="newLedger" class="mt-4 w-full rounded-xl border border-slate-200 py-2.5 text-xs font-bold dark:border-slate-700">＋ New personal ledger</button></div>
 </div>
 
 
@@ -211,7 +211,7 @@ async function registerLedger(code){
  const l=await getLedgers();if(!l.includes(code))l.push(code);
  LSset("dt_ledgers",JSON.stringify(l));await idbSet("ledgers",l);
 }
-function setLedger(code){ledger=code;LSset(KEY,code);idbSet("last",code);registerLedger(code)}
+function setLedger(code){ledger=code;base=loadBase(code);LSset(KEY,code);idbSet("last",code);registerLedger(code)}
 function load(){return tx}
 let saveChain=Promise.resolve();
 function save(){
@@ -219,16 +219,90 @@ function save(){
  if(LSset("dt_data_"+code,JSON.stringify(tx)))LSset("dt_upd_"+code,String(rec.updatedAt));
  LSset(KEY,code);
  saveChain=saveChain.then(async()=>{const ok=await idbSet("data_"+code,rec);await idbSet("last",code);await registerLedger(code);return ok}).catch(()=>{});
+ schedSync();
  return saveChain;
 }
+
+/* ---------- CLOUD SYNC (Firebase Realtime Database, REST) ----------
+   Paste your Firebase Realtime Database URL between the quotes, e.g.
+   "https://my-project-default-rtdb.firebaseio.com"
+   Leave empty to run in local-only mode. */
+const CLOUD_URL = "https://luckyredtuarantstorage-default-rtdb.firebaseio.com";
+const CLOUD = CLOUD_URL.replace(/\/+$/,"");
+let cloudState = CLOUD ? "connecting" : "off";
+let base = {};            // id -> short hash of the last version known to be in the cloud
+let syncing=false, syncTimer=null;
+function hash(str){let h=5381;for(let i=0;i<str.length;i++)h=((h<<5)+h+str.charCodeAt(i))|0;return str.length+":"+(h>>>0).toString(36)}
+const sigOf=x=>x?hash(JSON.stringify(x)):null;
+function loadBase(code){try{return JSON.parse(LSget("dt_base_"+code)||"{}")||{}}catch{return{}}}
+function saveBase(){LSset("dt_base_"+ledger,JSON.stringify(base));idbSet("base_"+ledger,base)}
+function updateCode(){
+ const icon=!CLOUD?"":cloudState==="ok"?" ☁✓":cloudState==="err"?" ☁✗":" ☁…";
+ if($("ledgerCode"))$("ledgerCode").textContent=`Ledger: ${ledger}${icon}`;
+ if($("ledgerInput"))$("ledgerInput").value=ledger;
+ if($("cloudStatus"))$("cloudStatus").textContent=!CLOUD?"Cloud sync is OFF (data only on this device).":cloudState==="ok"?"Cloud sync ON — this ledger loads the latest data on any device.":cloudState==="err"?"Cloud not reachable — working offline, will sync when online.":"Connecting to cloud…";
+}
+const sortTx=a=>a.sort((x,y)=>String(y.date||"").localeCompare(String(x.date||""))||(y.ts||0)-(x.ts||0));
+async function fetchRemote(code){
+ const r=await fetch(`${CLOUD}/ledgers/${encodeURIComponent(code)}/tx.json`,{cache:"no-store"});
+ if(!r.ok)throw new Error("http "+r.status);
+ return await r.json();
+}
+async function sync(){
+ if(!CLOUD||syncing)return;
+ syncing=true;const code=ledger;
+ try{
+  const R=(await fetchRemote(code))||{};
+  const L={};tx.forEach(x=>{L[x.id]=x});
+  const ids=new Set([...Object.keys(L),...Object.keys(R),...Object.keys(base)]);
+  const merged={},patch={};let pushed=0;
+  for(const id of ids){
+   const l=sigOf(L[id]),b=base[id]||null,rem=sigOf(R[id]);
+   if(l!==b){                       // changed on this device since last sync
+    if(L[id]){merged[id]=L[id];if(l!==rem){patch[id]=L[id];pushed++}}
+    else if(R[id]){patch[id]=null;pushed++}   // deleted here -> delete in cloud
+   }else if(R[id])merged[id]=R[id];  // unchanged here -> take cloud version
+  }
+  if(pushed){
+   const r=await fetch(`${CLOUD}/ledgers/${encodeURIComponent(code)}/tx.json`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(patch)});
+   if(!r.ok)throw new Error("push "+r.status);
+  }
+  if(ledger!==code)return;          // user switched ledger meanwhile
+  const before=tx.map(sigOf).join("|");
+  const next=sortTx(Object.values(merged));
+  base={};Object.keys(merged).forEach(id=>base[id]=sigOf(merged[id]));
+  saveBase();
+  const changed=before!==next.map(sigOf).join("|");
+  tx=next;
+  cloudState="ok";updateCode();
+  if(changed){
+   const rec={tx:tx,updatedAt:Date.now()};
+   if(LSset("dt_data_"+code,JSON.stringify(tx)))LSset("dt_upd_"+code,String(rec.updatedAt));
+   idbSet("data_"+code,rec);render();
+  }
+ }catch(e){cloudState="err";updateCode()}
+ finally{syncing=false}
+}
+function schedSync(){if(!CLOUD)return;clearTimeout(syncTimer);syncTimer=setTimeout(sync,400)}
+
 async function boot(){
  try{if(navigator.storage&&navigator.storage.persist)await navigator.storage.persist()}catch{}
  const last=await idbGet("last");
  if(last&&/^ledger_[a-z0-9]{3,30}$/i.test(last))ledger=last;
+ try{const q=new URLSearchParams(location.search).get("l");if(q&&/^ledger_[a-z0-9]{3,30}$/i.test(q))ledger=q}catch{}
+ base=loadBase(ledger);
+ if(!Object.keys(base).length){const b=await idbGet("base_"+ledger);if(b&&typeof b==="object")base=b}
  const rec=await readLedger(ledger);
  tx=rec&&Array.isArray(rec.tx)?rec.tx:[];
- await save();               // make sure both stores hold the same, latest copy
- init();
+ setLedger(ledger);
+ await save();
+ init();updateCode();
+ if(CLOUD){
+  sync();
+  setInterval(()=>{if(!document.hidden)sync()},10000);
+  document.addEventListener("visibilitychange",()=>{if(!document.hidden)sync()});
+  window.addEventListener("online",sync);
+ }
 }
 async function renderSaved(){
  const box=$("savedLedgers");if(!box)return;
@@ -237,12 +311,20 @@ async function renderSaved(){
 }
 async function openLedger(v){
  if(!/^ledger_[a-z0-9]{3,30}$/i.test(v)){toast(t("Invalid ledger code.","లెడ్జర్ కోడ్ సరిగ్గా లేదు."));return}
- const rec=await readLedger(v);
- if(!rec){toast(t("No data for this code in this browser. Use Backup > Restore with your backup file.","ఈ బ్రౌజర్‌లో ఈ కోడ్ డేటా లేదు. బ్యాకప్ ఫైల్ రీస్టోర్ చేయండి."));closeModal("shareModal");openModal("backupModal");return}
- await save();                // keep the ledger we are leaving safe
- tx=rec.tx;setLedger(v);await save();
- $("ledgerCode").textContent=`Ledger: ${ledger}`;$("ledgerInput").value=ledger;closeModal("shareModal");render();toast(t("Ledger opened.","లెడ్జర్ ఓపెన్ అయింది."));
+ let rec=await readLedger(v),R=null,reached=false;
+ if(CLOUD){try{R=await fetchRemote(v);reached=true}catch{}}
+ const hasRemote=R&&Object.keys(R).length>0;
+ if(!rec&&!hasRemote){
+  toast(reached?t("No ledger found with this code.","ఈ కోడ్‌తో లెడ్జర్ దొరకలేదు."):t("No data for this code in this browser. Use Backup > Restore with your backup file.","ఈ బ్రౌజర్‌లో ఈ కోడ్ డేటా లేదు. బ్యాకప్ ఫైల్ రీస్టోర్ చేయండి."));
+  if(!reached){closeModal("shareModal");openModal("backupModal")}return}
+ await save();
+ setLedger(v);
+ if(hasRemote&&!Object.keys(base).length){tx=sortTx(Object.values(R));base={};Object.keys(R).forEach(id=>base[id]=sigOf(R[id]));saveBase()}
+ else tx=rec?rec.tx:[];
+ await save();updateCode();closeModal("shareModal");render();toast(t("Ledger opened.","లెడ్జర్ ఓపెన్ అయింది."));
+ sync();
 }
+
 let charts = {cat:null, month:null};
 let pendingDelete = null;
 let toastTimer = null;
@@ -290,7 +372,7 @@ async function saveForm(e){
  if(!Number.isFinite(amount)||amount<=0){toast(t("Enter a valid amount.","సరైన మొత్తాన్ని నమోదు చేయండి."));return}
  const id=$("editId").value||crypto.randomUUID();
  const old=tx.find(x=>String(x.id)===String(id));
- const item={id,type:$("txType").value,amount,category:$("category").value,date:$("date").value,notes:$("notes").value.trim()||( $("txType").value==="income"?"Income":"Expense"),receiptData:$("receiptData").value||null,receiptName:$("receiptData").value?($("previewName").textContent||old?.receiptName||null):null,timestamp:old?.timestamp||new Date().toISOString(),updatedAt:new Date().toISOString()};
+ const item={id,ts:Date.now(),type:$("txType").value,amount,category:$("category").value,date:$("date").value,notes:$("notes").value.trim()||( $("txType").value==="income"?"Income":"Expense"),receiptData:$("receiptData").value||null,receiptName:$("receiptData").value?($("previewName").textContent||old?.receiptName||null):null,timestamp:old?.timestamp||new Date().toISOString(),updatedAt:new Date().toISOString()};
  if($("editId").value){const i=tx.findIndex(x=>String(x.id)===String(id));if(i>=0)tx[i]=item}
  else tx.unshift(item);
  save();closeModal("txModal");render();toast(t("Entry saved successfully.","ఎంట్రీ విజయవంతంగా సేవ్ అయింది."));
@@ -378,7 +460,7 @@ function applyLang(){
  render();
 }
 function init(){
- $("ledgerCode").textContent=`Ledger: ${ledger}`;$("ledgerInput").value=ledger;
+ updateCode();
   $("themeBtn").textContent=document.documentElement.classList.contains("dark")?"☀":"☾";
  $("addBtn").onclick=openAdd;$("backupBtn").onclick=()=>openModal("backupModal");$("shareBtn").onclick=()=>{renderSaved();openModal("shareModal")};$("langBtn").onclick=()=>{lang=lang==="te"?"en":"te";LSset("dt_lang",lang);applyLang()};
  $("themeBtn").onclick=()=>{const d=document.documentElement.classList.toggle("dark");LSset("dt_theme",d?"dark":"light");$("themeBtn").textContent=d?"☀":"☾";document.querySelector('meta[name=theme-color]').content=d?"#0f172a":"#4f46e5";["cat","month"].forEach(k=>{if(charts[k]){charts[k].destroy();charts[k]=null}});renderCharts()};
@@ -387,10 +469,11 @@ function init(){
  $("removeFile").onclick=resetReceipt;
  ["search","typeFilter","catFilter","dateFilter"].forEach(id=>$(id).addEventListener("input",renderTable));
  $("exportBtn").onclick=exportCSV;$("downloadBackup").onclick=downloadBackup;$("shareBackup").onclick=shareBackup;$("restoreBtn").onclick=()=>$("restoreFile").click();$("restoreFile").onchange=restoreBackup;
+ $("copyLink").onclick=async()=>{const u=location.origin+location.pathname+"?l="+ledger;try{await navigator.clipboard.writeText(u)}catch{prompt("Copy link",u)}toast(t("Share link copied.","లింక్ కాపీ అయింది."))};
  $("copyLedger").onclick=async()=>{try{await navigator.clipboard.writeText(ledger)}catch{$("ledgerInput").select();document.execCommand("copy")}toast(t("Ledger code copied.","లెడ్జర్ కోడ్ కాపీ అయింది."))};
  $("joinLedger").onclick=()=>openLedger($("joinInput").value.trim());
  $("savedLedgers").addEventListener("click",e=>{const b=e.target.closest("[data-open-ledger]");if(b)openLedger(b.dataset.openLedger)});
- $("newLedger").onclick=()=>{$("joinInput").value="";save();setLedger(newCode());tx=[];save();$("ledgerCode").textContent=`Ledger: ${ledger}`;$("ledgerInput").value=ledger;closeModal("shareModal");render();toast(t("New ledger created.","కొత్త లెడ్జర్ క్రియేట్ అయింది."))};
+ $("newLedger").onclick=()=>{$("joinInput").value="";save();setLedger(newCode());tx=[];base={};save();updateCode();closeModal("shareModal");render();toast(t("New ledger created.","కొత్త లెడ్జర్ క్రియేట్ అయింది."))};
  $("confirmDelete").onclick=deleteConfirmed;
  document.addEventListener("click",e=>{const c=e.target.closest("[data-close]");if(c)closeModal(c.dataset.close);const ed=e.target.closest("[data-edit]");if(ed)openEdit(ed.dataset.edit);const del=e.target.closest("[data-delete]");if(del)askDelete(del.dataset.delete);const view=e.target.closest("[data-view]");if(view){const x=tx.find(i=>String(i.id)===String(view.dataset.view));if(x){$("fullImage").src=x.receiptData;openModal("imageModal")}}});
  document.querySelectorAll(".modal").forEach(m=>m.addEventListener("click",e=>{if(e.target===m)closeModal(m.id)}));
