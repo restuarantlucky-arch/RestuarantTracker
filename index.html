@@ -151,7 +151,7 @@ input:focus,select:focus{outline:none;box-shadow:0 0 0 3px rgba(99,102,241,.15);
 
 <!-- Share modal -->
 <div id="shareModal" class="modal fixed inset-0 z-50 grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm" role="dialog">
- <div class="modal-card w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl dark:bg-slate-900"><div class="mb-5 flex items-center justify-between"><h3 class="text-lg font-extrabold">Ledger</h3><button data-close="shareModal" class="grid h-9 w-9 place-items-center rounded-xl bg-slate-100 dark:bg-slate-800">×</button></div><label class="mb-1 block text-xs font-bold">Current Ledger Code</label><div class="flex gap-2"><input id="ledgerInput" readonly class="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-950"><button id="copyLedger" class="rounded-xl bg-indigo-600 px-3 text-xs font-bold text-white">Copy</button><button id="copyLink" class="rounded-xl bg-sky-600 px-3 text-xs font-bold text-white">Link</button></div><p id="cloudStatus" class="mt-2 text-[10px] opacity-70"></p><div class="my-5 border-t border-slate-100 dark:border-slate-800"></div><label class="mb-1 block text-xs font-bold">Switch local ledger</label><div class="flex gap-2"><input id="joinInput" class="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-950" placeholder="ledger_xxxxxx"><button id="joinLedger" class="rounded-xl bg-emerald-600 px-3 text-xs font-bold text-white">Open</button></div><div id="savedLedgers" class="mt-3 flex flex-wrap gap-2"></div><button id="newLedger" class="mt-4 w-full rounded-xl border border-slate-200 py-2.5 text-xs font-bold dark:border-slate-700">＋ New personal ledger</button></div>
+ <div class="modal-card w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl dark:bg-slate-900"><div class="mb-5 flex items-center justify-between"><h3 class="text-lg font-extrabold">Ledger</h3><button data-close="shareModal" class="grid h-9 w-9 place-items-center rounded-xl bg-slate-100 dark:bg-slate-800">×</button></div><label class="mb-1 block text-xs font-bold">Current Ledger Code</label><div class="flex gap-2"><input id="ledgerInput" readonly class="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-950"><button id="copyLedger" class="rounded-xl bg-indigo-600 px-3 text-xs font-bold text-white">Copy</button><button id="copyLink" class="rounded-xl bg-sky-600 px-3 text-xs font-bold text-white">Link</button></div><p id="cloudStatus" class="mt-2 text-[10px] opacity-70"></p><div class="my-5 border-t border-slate-100 dark:border-slate-800"></div><label class="mb-1 block text-xs font-bold">Switch local ledger</label><div class="flex gap-2"><input id="joinInput" class="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-950" placeholder="oct2026_xxxxxx"><button id="joinLedger" class="rounded-xl bg-emerald-600 px-3 text-xs font-bold text-white">Open</button></div><div id="savedLedgers" class="mt-3 flex flex-wrap gap-2"></div><button id="newLedger" class="mt-4 w-full rounded-xl border border-slate-200 py-2.5 text-xs font-bold dark:border-slate-700">＋ New personal ledger</button></div>
 </div>
 
 
@@ -178,7 +178,9 @@ const TE = {"Master Salary":"మాస్టర్ జీతం","Helper Salary"
 const KEY = "dailytracker_pro_ledger";
 const LSget=k=>{try{return localStorage.getItem(k)}catch{return null}};
 const LSset=(k,v)=>{try{localStorage.setItem(k,v);return true}catch{return false}};
-const newCode=()=>"ledger_"+Math.random().toString(36).slice(2,8);
+const LEDGER_RE=/^([a-z]{3,9}(\d{4})?)_[a-z0-9]{3,30}$/i;   // oct2026_x7k2p9 (new) or ledger_ohhtek (old)
+const MONTHS=["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+const newCode=()=>{const d=new Date();let r="";while(r.length<6)r+=Math.random().toString(36).slice(2);return MONTHS[d.getMonth()]+d.getFullYear()+"_"+r.slice(0,6)};
 let lang = LSget("dt_lang") || "en";
 let ledger = LSget(KEY) || newCode();
 let tx = [];
@@ -205,7 +207,7 @@ async function getLedgers(){
  let l=[];try{l=JSON.parse(LSget("dt_ledgers")||"[]")}catch{}
  const d=await idbGet("ledgers");if(Array.isArray(d))l=l.concat(d);
  if(ledger)l.push(ledger);
- return [...new Set(l)].filter(x=>/^ledger_[a-z0-9]{3,30}$/i.test(x));
+ return [...new Set(l)].filter(x=>LEDGER_RE.test(x));
 }
 async function registerLedger(code){
  const l=await getLedgers();if(!l.includes(code))l.push(code);
@@ -285,16 +287,54 @@ async function sync(){
 }
 function schedSync(){if(!CLOUD)return;clearTimeout(syncTimer);syncTimer=setTimeout(sync,400)}
 
+function askLedger(){
+ return new Promise(resolve=>{
+  const d=document.createElement("div");
+  d.className="fixed inset-0 z-[70] grid place-items-center bg-slate-950/70 p-4 backdrop-blur-sm";
+  d.innerHTML=`<div class="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl dark:bg-slate-900 dark:text-slate-100">
+   <h2 class="text-xl font-extrabold">Daily Tracker</h2>
+   <p class="mt-1 text-xs opacity-70">Which ledger do you want to use? / ఏ లెడ్జర్ వాడాలి?</p>
+   <button id="askNew" class="mt-5 w-full rounded-xl bg-indigo-600 py-3 text-sm font-bold text-white">＋ New ledger / కొత్త లెడ్జర్</button>
+   <div class="my-4 text-center text-[10px] font-bold opacity-50">OR / లేదా</div>
+   <label class="mb-1 block text-xs font-bold">Existing ledger ID / ఉన్న లెడ్జర్ ID</label>
+   <input id="askCode" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="oct2026_xxxxxx" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 font-mono text-sm dark:border-slate-700 dark:bg-slate-950">
+   <button id="askOpen" class="mt-3 w-full rounded-xl bg-emerald-600 py-3 text-sm font-bold text-white">Open existing ledger / ఓపెన్ చేయి</button>
+   <p id="askMsg" class="mt-3 min-h-[1rem] text-xs font-semibold text-rose-600"></p></div>`;
+  document.body.appendChild(d);
+  const msg=d.querySelector("#askMsg");
+  const finish=()=>{d.remove();resolve()};
+  d.querySelector("#askNew").onclick=()=>{ledger=newCode();tx=[];base={};finish()};
+  const openIt=async()=>{
+   const v=d.querySelector("#askCode").value.trim().toLowerCase();
+   if(!LEDGER_RE.test(v)){msg.textContent="Invalid ledger ID / లెడ్జర్ ID సరిగ్గా లేదు";return}
+   msg.style.color="";msg.textContent="Checking… / చూస్తున్నాం…";
+   const rec=await readLedger(v);let R=null,reached=false;
+   if(CLOUD){try{R=await fetchRemote(v);reached=true}catch{}}
+   const hasRemote=R&&Object.keys(R).length>0;
+   if(!rec&&!hasRemote){msg.style.color="#e11d48";msg.textContent=reached?"No ledger found with this ID / ఈ IDతో లెడ్జర్ లేదు":"Cannot reach cloud. Check internet / ఇంటర్నెట్ చూడండి";return}
+   ledger=v;base=loadBase(v);
+   if(hasRemote&&!Object.keys(base).length){tx=sortTx(Object.values(R));base={};Object.keys(R).forEach(id=>base[id]=sigOf(R[id]))}
+   else tx=rec?rec.tx:[];
+   finish();
+  };
+  d.querySelector("#askOpen").onclick=openIt;
+  d.querySelector("#askCode").addEventListener("keydown",e=>{if(e.key==="Enter")openIt()});
+ });
+}
 async function boot(){
  try{if(navigator.storage&&navigator.storage.persist)await navigator.storage.persist()}catch{}
+ let fromUrl=false;
  const last=await idbGet("last");
- if(last&&/^ledger_[a-z0-9]{3,30}$/i.test(last))ledger=last;
- try{const q=new URLSearchParams(location.search).get("l");if(q&&/^ledger_[a-z0-9]{3,30}$/i.test(q))ledger=q}catch{}
+ if(last&&LEDGER_RE.test(last))ledger=last;
+ try{const q=new URLSearchParams(location.search).get("l");if(q&&LEDGER_RE.test(q)){ledger=q;fromUrl=true}}catch{}
  base=loadBase(ledger);
  if(!Object.keys(base).length){const b=await idbGet("base_"+ledger);if(b&&typeof b==="object")base=b}
  const rec=await readLedger(ledger);
  tx=rec&&Array.isArray(rec.tx)?rec.tx:[];
- setLedger(ledger);
+ // First launch on this device (or the remembered ledger is empty): ask new / existing
+ if(!fromUrl&&(!rec||!rec.tx.length))await askLedger();
+ {const keep=base;setLedger(ledger);if(Object.keys(keep).length)base=keep}
+ saveBase();
  await save();
  init();updateCode();
  if(CLOUD){
@@ -310,7 +350,7 @@ async function renderSaved(){
  box.innerHTML=l.length?`<div class="w-full text-[10px] font-bold opacity-60">${t("Saved on this device","ఈ పరికరంలో సేవ్ అయినవి")}</div>`+l.map(x=>`<button type="button" data-open-ledger="${esc(x)}" class="rounded-lg border border-slate-200 px-2 py-1 font-mono text-[11px] dark:border-slate-700">${esc(x)}</button>`).join(""):"";
 }
 async function openLedger(v){
- if(!/^ledger_[a-z0-9]{3,30}$/i.test(v)){toast(t("Invalid ledger code.","లెడ్జర్ కోడ్ సరిగ్గా లేదు."));return}
+ if(!LEDGER_RE.test(v)){toast(t("Invalid ledger code.","లెడ్జర్ కోడ్ సరిగ్గా లేదు."));return}
  let rec=await readLedger(v),R=null,reached=false;
  if(CLOUD){try{R=await fetchRemote(v);reached=true}catch{}}
  const hasRemote=R&&Object.keys(R).length>0;
@@ -449,7 +489,7 @@ async function shareBackup(){
 function restoreBackup(e){
  const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{
   try{const p=JSON.parse(r.result),list=Array.isArray(p)?p:p.transactions;if(!Array.isArray(list))throw 0;
-   if(p&&p.ledger&&/^ledger_[a-z0-9]{3,30}$/i.test(p.ledger)){setLedger(p.ledger);$("ledgerCode").textContent=`Ledger: ${ledger}`;$("ledgerInput").value=ledger}tx=list.map(x=>({...x,id:String(x.id||crypto.randomUUID())}));save();closeModal("backupModal");render();toast(t("Backup restored.","బ్యాకప్ రీస్టోర్ అయింది."));
+   if(p&&p.ledger&&LEDGER_RE.test(p.ledger)){setLedger(p.ledger);$("ledgerCode").textContent=`Ledger: ${ledger}`;$("ledgerInput").value=ledger}tx=list.map(x=>({...x,id:String(x.id||crypto.randomUUID())}));save();closeModal("backupModal");render();toast(t("Backup restored.","బ్యాకప్ రీస్టోర్ అయింది."));
   }catch{toast(t("Invalid backup file.","చెల్లని బ్యాకప్ ఫైల్."))}
   e.target.value="";
  };r.readAsText(f);
@@ -471,7 +511,7 @@ function init(){
  $("exportBtn").onclick=exportCSV;$("downloadBackup").onclick=downloadBackup;$("shareBackup").onclick=shareBackup;$("restoreBtn").onclick=()=>$("restoreFile").click();$("restoreFile").onchange=restoreBackup;
  $("copyLink").onclick=async()=>{const u=location.origin+location.pathname+"?l="+ledger;try{await navigator.clipboard.writeText(u)}catch{prompt("Copy link",u)}toast(t("Share link copied.","లింక్ కాపీ అయింది."))};
  $("copyLedger").onclick=async()=>{try{await navigator.clipboard.writeText(ledger)}catch{$("ledgerInput").select();document.execCommand("copy")}toast(t("Ledger code copied.","లెడ్జర్ కోడ్ కాపీ అయింది."))};
- $("joinLedger").onclick=()=>openLedger($("joinInput").value.trim());
+ $("joinLedger").onclick=()=>openLedger($("joinInput").value.trim().toLowerCase());
  $("savedLedgers").addEventListener("click",e=>{const b=e.target.closest("[data-open-ledger]");if(b)openLedger(b.dataset.openLedger)});
  $("newLedger").onclick=()=>{$("joinInput").value="";save();setLedger(newCode());tx=[];base={};save();updateCode();closeModal("shareModal");render();toast(t("New ledger created.","కొత్త లెడ్జర్ క్రియేట్ అయింది."))};
  $("confirmDelete").onclick=deleteConfirmed;
