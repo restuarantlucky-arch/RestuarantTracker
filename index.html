@@ -151,7 +151,7 @@ input:focus,select:focus{outline:none;box-shadow:0 0 0 3px rgba(99,102,241,.15);
 
 <!-- Share modal -->
 <div id="shareModal" class="modal fixed inset-0 z-50 grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm" role="dialog">
- <div class="modal-card w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl dark:bg-slate-900"><div class="mb-5 flex items-center justify-between"><h3 class="text-lg font-extrabold">Ledger</h3><button data-close="shareModal" class="grid h-9 w-9 place-items-center rounded-xl bg-slate-100 dark:bg-slate-800">×</button></div><label class="mb-1 block text-xs font-bold">Current Ledger Code</label><div class="flex gap-2"><input id="ledgerInput" readonly class="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-950"><button id="copyLedger" class="rounded-xl bg-indigo-600 px-3 text-xs font-bold text-white">Copy</button><button id="copyLink" class="rounded-xl bg-sky-600 px-3 text-xs font-bold text-white">Link</button></div><p id="cloudStatus" class="mt-2 text-[10px] opacity-70"></p><div class="my-5 border-t border-slate-100 dark:border-slate-800"></div><label class="mb-1 block text-xs font-bold">Switch local ledger</label><div class="flex gap-2"><input id="joinInput" class="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-950" placeholder="oct2026_xxxxxx"><button id="joinLedger" class="rounded-xl bg-emerald-600 px-3 text-xs font-bold text-white">Open</button></div><div id="savedLedgers" class="mt-3 flex flex-wrap gap-2"></div><button id="newLedger" class="mt-4 w-full rounded-xl border border-slate-200 py-2.5 text-xs font-bold dark:border-slate-700">＋ New personal ledger</button></div>
+ <div class="modal-card w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl dark:bg-slate-900"><div class="mb-5 flex items-center justify-between"><h3 class="text-lg font-extrabold">Ledger</h3><button data-close="shareModal" class="grid h-9 w-9 place-items-center rounded-xl bg-slate-100 dark:bg-slate-800">×</button></div><label class="mb-1 block text-xs font-bold">Current Ledger Code</label><div class="flex gap-2"><input id="ledgerInput" readonly class="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-950"><button id="copyLedger" class="rounded-xl bg-indigo-600 px-3 text-xs font-bold text-white">Copy</button><button id="copyLink" class="rounded-xl bg-sky-600 px-3 text-xs font-bold text-white">Link</button></div><p id="cloudStatus" class="mt-2 text-[10px] opacity-70"></p><div class="my-5 border-t border-slate-100 dark:border-slate-800"></div><label class="mb-1 block text-xs font-bold">Switch local ledger</label><div class="flex gap-2"><input id="joinInput" class="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-950" placeholder="oct2026_xxxxxx"><button id="joinLedger" class="rounded-xl bg-emerald-600 px-3 text-xs font-bold text-white">Open</button></div><div id="savedLedgers" class="mt-3 max-h-60 space-y-2 overflow-y-auto"></div><button id="newLedger" class="mt-4 w-full rounded-xl border border-slate-200 py-2.5 text-xs font-bold dark:border-slate-700">＋ New personal ledger</button></div>
 </div>
 
 
@@ -277,6 +277,7 @@ async function sync(){
   const changed=before!==next.map(sigOf).join("|");
   tx=next;
   cloudState="ok";updateCode();
+  const n=Object.keys(merged).length;if(pushed||registered[code]!==n)indexPut(code,n);
   if(changed){
    const rec={tx:tx,updatedAt:Date.now()};
    if(LSset("dt_data_"+code,JSON.stringify(tx)))LSset("dt_upd_"+code,String(rec.updatedAt));
@@ -287,38 +288,64 @@ async function sync(){
 }
 function schedSync(){if(!CLOUD)return;clearTimeout(syncTimer);syncTimer=setTimeout(sync,400)}
 
+
+/* ---------- Ledger registry (cloud list of ALL ledgers) ---------- */
+let registered={};
+async function fetchIndex(){
+ if(!CLOUD)return null;
+ try{const r=await fetch(`${CLOUD}/index.json`,{cache:"no-store"});if(!r.ok)return null;return (await r.json())||{}}catch{return null}
+}
+async function indexPut(code,count){
+ if(!CLOUD)return;
+ try{const r=await fetch(`${CLOUD}/index/${encodeURIComponent(code)}.json`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({updated:Date.now(),count:count})});if(r.ok)registered[code]=count}catch{}
+}
+async function allLedgers(){
+ const idx=(await fetchIndex())||{},m={};
+ Object.keys(idx).forEach(c=>{if(LEDGER_RE.test(c))m[c]={code:c,count:(idx[c]||{}).count,updated:(idx[c]||{}).updated}});
+ (await getLedgers()).forEach(c=>{if(!m[c])m[c]={code:c}});
+ return Object.values(m).sort((a,b)=>(b.updated||0)-(a.updated||0)||a.code.localeCompare(b.code));
+}
+function ledgerCard(l,cur,attr){
+ const when=l.updated?new Date(l.updated).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"}):"";
+ const info=[l.count!=null?`${l.count} ${t("entries","ఎంట్రీలు")}`:"",when].filter(Boolean).join(" · ");
+ return `<button type="button" ${attr}="${esc(l.code)}" ${cur?"disabled":""} class="flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left ${cur?"border-indigo-400 bg-indigo-50 dark:bg-indigo-950/40":"border-slate-200 dark:border-slate-700"}"><span class="font-mono text-xs font-bold">${esc(l.code)}</span><span class="ml-2 text-[10px] opacity-60">${cur?t("Current","ప్రస్తుతం"):esc(info)}</span></button>`;
+}
 function askLedger(){
  return new Promise(resolve=>{
   const d=document.createElement("div");
-  d.className="fixed inset-0 z-[70] grid place-items-center bg-slate-950/70 p-4 backdrop-blur-sm";
-  d.innerHTML=`<div class="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl dark:bg-slate-900 dark:text-slate-100">
+  d.className="fixed inset-0 z-[70] overflow-y-auto bg-slate-950/70 p-4 backdrop-blur-sm";
+  d.innerHTML=`<div class="mx-auto my-6 w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl dark:bg-slate-900 dark:text-slate-100">
    <h2 class="text-xl font-extrabold">Daily Tracker</h2>
    <p class="mt-1 text-xs opacity-70">Which ledger do you want to use? / ఏ లెడ్జర్ వాడాలి?</p>
    <button id="askNew" class="mt-5 w-full rounded-xl bg-indigo-600 py-3 text-sm font-bold text-white">＋ New ledger / కొత్త లెడ్జర్</button>
-   <div class="my-4 text-center text-[10px] font-bold opacity-50">OR / లేదా</div>
-   <label class="mb-1 block text-xs font-bold">Existing ledger ID / ఉన్న లెడ్జర్ ID</label>
+   <div class="my-4 text-center text-[10px] font-bold opacity-50">All ledgers / అన్ని లెడ్జర్లు</div>
+   <div id="askList" class="space-y-2 text-xs opacity-70">Loading… / లోడ్ అవుతోంది…</div>
+   <div class="my-4 text-center text-[10px] font-bold opacity-50">OR type ID / లేదా ID టైప్ చేయండి</div>
    <input id="askCode" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="oct2026_xxxxxx" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 font-mono text-sm dark:border-slate-700 dark:bg-slate-950">
-   <button id="askOpen" class="mt-3 w-full rounded-xl bg-emerald-600 py-3 text-sm font-bold text-white">Open existing ledger / ఓపెన్ చేయి</button>
+   <button id="askOpen" class="mt-3 w-full rounded-xl bg-emerald-600 py-3 text-sm font-bold text-white">Open / ఓపెన్</button>
    <p id="askMsg" class="mt-3 min-h-[1rem] text-xs font-semibold text-rose-600"></p></div>`;
   document.body.appendChild(d);
   const msg=d.querySelector("#askMsg");
   const finish=()=>{d.remove();resolve()};
+  allLedgers().then(l=>{d.querySelector("#askList").innerHTML=l.length?l.map(x=>ledgerCard(x,false,"data-pick")).join(""):'<div class="text-center">No ledgers yet / లెడ్జర్లు లేవు</div>'});
   d.querySelector("#askNew").onclick=()=>{ledger=newCode();tx=[];base={};finish()};
-  const openIt=async()=>{
-   const v=d.querySelector("#askCode").value.trim().toLowerCase();
-   if(!LEDGER_RE.test(v)){msg.textContent="Invalid ledger ID / లెడ్జర్ ID సరిగ్గా లేదు";return}
+  const openIt=async v=>{
+   v=String(v||"").trim().toLowerCase();
+   if(!LEDGER_RE.test(v)){msg.style.color="#e11d48";msg.textContent="Invalid ledger ID / లెడ్జర్ ID సరిగ్గా లేదు";return}
    msg.style.color="";msg.textContent="Checking… / చూస్తున్నాం…";
    const rec=await readLedger(v);let R=null,reached=false;
    if(CLOUD){try{R=await fetchRemote(v);reached=true}catch{}}
+   const idx=CLOUD?await fetchIndex():null,inIdx=!!(idx&&idx[v]);
    const hasRemote=R&&Object.keys(R).length>0;
-   if(!rec&&!hasRemote){msg.style.color="#e11d48";msg.textContent=reached?"No ledger found with this ID / ఈ IDతో లెడ్జర్ లేదు":"Cannot reach cloud. Check internet / ఇంటర్నెట్ చూడండి";return}
+   if(!rec&&!hasRemote&&!inIdx){msg.style.color="#e11d48";msg.textContent=reached?"No ledger found with this ID / ఈ IDతో లెడ్జర్ లేదు":"Cannot reach cloud. Check internet / ఇంటర్నెట్ చూడండి";return}
    ledger=v;base=loadBase(v);
    if(hasRemote&&!Object.keys(base).length){tx=sortTx(Object.values(R));base={};Object.keys(R).forEach(id=>base[id]=sigOf(R[id]))}
    else tx=rec?rec.tx:[];
    finish();
   };
-  d.querySelector("#askOpen").onclick=openIt;
-  d.querySelector("#askCode").addEventListener("keydown",e=>{if(e.key==="Enter")openIt()});
+  d.querySelector("#askOpen").onclick=()=>openIt(d.querySelector("#askCode").value);
+  d.querySelector("#askCode").addEventListener("keydown",e=>{if(e.key==="Enter")openIt(e.target.value)});
+  d.querySelector("#askList").addEventListener("click",e=>{const b=e.target.closest("[data-pick]");if(b)openIt(b.dataset.pick)});
  });
 }
 async function boot(){
@@ -346,15 +373,17 @@ async function boot(){
 }
 async function renderSaved(){
  const box=$("savedLedgers");if(!box)return;
- const l=(await getLedgers()).filter(x=>x!==ledger);
- box.innerHTML=l.length?`<div class="w-full text-[10px] font-bold opacity-60">${t("Saved on this device","ఈ పరికరంలో సేవ్ అయినవి")}</div>`+l.map(x=>`<button type="button" data-open-ledger="${esc(x)}" class="rounded-lg border border-slate-200 px-2 py-1 font-mono text-[11px] dark:border-slate-700">${esc(x)}</button>`).join(""):"";
+ box.innerHTML=`<div class="w-full text-[10px] font-bold opacity-60">${t("Loading ledgers…","లెడ్జర్లు లోడ్ అవుతున్నాయి…")}</div>`;
+ const l=await allLedgers();
+ box.innerHTML=`<div class="w-full text-[10px] font-bold opacity-60">${t("All ledgers — tap to open","అన్ని లెడ్జర్లు — ఓపెన్ చేయడానికి నొక్కండి")}</div>`+l.map(x=>ledgerCard(x,x.code===ledger,"data-open-ledger")).join("");
 }
 async function openLedger(v){
  if(!LEDGER_RE.test(v)){toast(t("Invalid ledger code.","లెడ్జర్ కోడ్ సరిగ్గా లేదు."));return}
  let rec=await readLedger(v),R=null,reached=false;
  if(CLOUD){try{R=await fetchRemote(v);reached=true}catch{}}
  const hasRemote=R&&Object.keys(R).length>0;
- if(!rec&&!hasRemote){
+ const idx0=CLOUD?await fetchIndex():null,inIdx=!!(idx0&&idx0[v]);
+ if(!rec&&!hasRemote&&!inIdx){
   toast(reached?t("No ledger found with this code.","ఈ కోడ్‌తో లెడ్జర్ దొరకలేదు."):t("No data for this code in this browser. Use Backup > Restore with your backup file.","ఈ బ్రౌజర్‌లో ఈ కోడ్ డేటా లేదు. బ్యాకప్ ఫైల్ రీస్టోర్ చేయండి."));
   if(!reached){closeModal("shareModal");openModal("backupModal")}return}
  await save();
