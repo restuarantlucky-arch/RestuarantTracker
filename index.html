@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#4f46e5">
+<title>DailyTracker Pro — Expense & Bill Tracker</title>
+<script>try{var th=localStorage.getItem("dt_theme");if(th==="dark"||(!th&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark")}catch(e){}</script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>tailwind.config={darkMode:"class"};</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{font-family:Inter,system-ui,sans-serif}
+button,input,select{font:inherit}.modal{visibility:hidden;opacity:0;pointer-events:none;transition:opacity .18s ease,visibility .18s}
+.modal.is-open{visibility:visible;opacity:1;pointer-events:auto}
+.modal-card{transform:translateY(8px) scale(.985);transition:transform .18s ease}
+.modal.is-open .modal-card{transform:none}
+.no-scroll{overflow:hidden}
+.dark{color-scheme:dark}
+.date-row td{position:sticky;top:0}
+.safe-bottom{padding-bottom:max(1rem,env(safe-area-inset-bottom))}
+.toast{transform:translateY(12px);opacity:0;pointer-events:none;transition:.22s}
+.toast.show{transform:none;opacity:1}
+.action-btn{transition:transform .12s,background .12s}.action-btn:active{transform:scale(.96)}
+.glass{backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.table-wrap{scrollbar-width:thin}
+input:focus,select:focus{outline:none;box-shadow:0 0 0 3px rgba(99,102,241,.15);border-color:#6366f1}
+.dark input:focus,.dark select:focus{box-shadow:0 0 0 3px rgba(129,140,248,.18)}
+@media(max-width:640px){.desktop-only{display:none}.mobile-stack{flex-direction:column}.mobile-full{width:100%}}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" onerror="var s=document.createElement('script');s.src='https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';document.head.appendChild(s)"></script>
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100">
+<header class="sticky top-0 z-40 glass border-b border-slate-200/80 bg-white/85 dark:border-slate-800 dark:bg-slate-950/85">
+  <div class="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
+    <div class="flex min-w-0 items-center gap-3">
+      <div class="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-500/20">₹</div>
+      <div class="min-w-0">
+        <h1 class="truncate text-base font-extrabold sm:text-lg">DailyTracker <span class="text-indigo-600">Pro</span></h1>
+        <p id="subtitle" class="hidden truncate text-[10px] font-medium text-slate-500 sm:block">Smart daily income & expense tracker</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-1.5 sm:gap-2">
+      <button id="langBtn" class="action-btn rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold dark:border-slate-700 dark:bg-slate-900">తెలుగు</button>
+      <button id="themeBtn" aria-label="Toggle theme" class="action-btn rounded-xl border border-slate-200 bg-white px-2.5 py-2 dark:border-slate-700 dark:bg-slate-900">☾</button>
+      <button id="backupBtn" class="action-btn hidden rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 sm:inline-flex dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">Backup</button>
+      <button id="addBtn" class="action-btn rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white shadow-lg shadow-indigo-500/20">＋ <span id="addLabel">Add Entry</span></button>
+    </div>
+  </div>
+</header>
+
+<main class="mx-auto max-w-7xl space-y-5 px-4 py-5 sm:px-6 sm:py-7">
+  <section class="rounded-3xl border border-indigo-100 bg-gradient-to-br from-indigo-50 via-white to-purple-50 p-5 shadow-sm dark:border-indigo-900/50 dark:from-indigo-950/50 dark:via-slate-900 dark:to-purple-950/30">
+    <div class="flex items-center justify-between gap-4">
+      <div>
+        <p class="mb-1 text-[11px] font-bold uppercase tracking-widest text-indigo-600 dark:text-indigo-400">Ledger</p>
+        <h2 id="ledgerTitle" class="text-xl font-extrabold">Your Daily Money Dashboard</h2>
+        <p id="ledgerCode" class="mt-1 font-mono text-[10px] text-slate-500"></p>
+      </div>
+      <button id="shareBtn" class="action-btn rounded-xl bg-white px-3 py-2 text-xs font-bold text-indigo-700 shadow-sm ring-1 ring-indigo-100 dark:bg-slate-900 dark:text-indigo-300 dark:ring-indigo-900">Share / Ledger</button>
+    </div>
+  </section>
+
+  <section class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900"><p id="incomeLabel" class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Income</p><p id="incomeCard" class="mt-2 text-xl font-extrabold text-emerald-600">₹0</p></div>
+    <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900"><p id="expenseLabel" class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Expenses</p><p id="expenseCard" class="mt-2 text-xl font-extrabold text-rose-600">₹0</p></div>
+    <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900"><p id="balanceLabel" class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Balance</p><p id="balanceCard" class="mt-2 text-xl font-extrabold text-indigo-600">₹0</p></div>
+    <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900"><p id="receiptLabel" class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Receipts</p><p id="receiptCard" class="mt-2 text-xl font-extrabold text-purple-600">0</p></div>
+  </section>
+
+  <section class="grid gap-5 lg:grid-cols-2">
+    <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900"><div class="mb-3 flex items-center justify-between"><h3 id="catChartTitle" class="font-bold">Expense by Category</h3></div><div class="h-64"><canvas id="categoryChart"></canvas></div></div>
+    <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900"><div class="mb-3 flex items-center justify-between"><h3 id="monthChartTitle" class="font-bold">Monthly Trend</h3></div><div class="h-64"><canvas id="monthlyChart"></canvas></div></div>
+  </section>
+
+  <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <div class="border-b border-slate-200 p-4 dark:border-slate-800">
+      <div class="mb-3 flex items-center justify-between gap-3"><div><h2 id="historyTitle" class="font-extrabold">Transactions</h2><p id="resultCount" class="text-[10px] text-slate-500"></p></div><button id="exportBtn" class="action-btn rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold dark:bg-slate-800">⇩ CSV</button></div>
+      <div class="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
+        <input id="search" class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-950" placeholder="Search notes or category">
+        <select id="typeFilter" class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-950"><option value="all">All types</option><option value="income">Income</option><option value="expense">Expense</option></select>
+        <select id="catFilter" class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-950"><option value="all">All categories</option></select>
+        <input id="dateFilter" type="date" class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-950" title="From date">
+        <input id="dateTo" type="date" class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-950" title="To date">
+        <button id="clearFilters" type="button" class="action-btn rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold dark:bg-slate-800">✕ Clear</button>
+      </div>
+    </div>
+    <div class="table-wrap overflow-x-auto">
+      <table class="w-full min-w-[760px] text-left text-xs"><thead class="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 dark:bg-slate-950/50"><tr><th class="px-4 py-3">Date</th><th class="px-4 py-3">Type</th><th class="px-4 py-3">Category</th><th class="px-4 py-3">Notes</th><th class="px-4 py-3 text-center">Bill</th><th class="px-4 py-3 text-right">Amount</th><th class="px-4 py-3 text-center">Actions</th></tr></thead><tbody id="rows" class="divide-y divide-slate-100 dark:divide-slate-800"></tbody></table>
+    </div>
+    <div id="empty" class="hidden px-4 py-14 text-center"><div class="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-slate-100 text-xl dark:bg-slate-800">₹</div><p id="emptyTitle" class="font-bold">No transactions</p><p id="emptyText" class="mt-1 text-xs text-slate-500">Add your first income or expense.</p></div>
+  </section>
+
+  <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 class="font-extrabold">Reports & Excel</h2>
+        <p class="text-[10px] text-slate-500">View daily/monthly reports and download Excel files.</p>
+      </div>
+      <div id="reportSummary" class="grid grid-cols-2 gap-2 sm:grid-cols-4"></div>
+    </div>
+    <div class="mb-3 flex flex-wrap items-end gap-3">
+      <div><label class="mb-1 block text-xs font-semibold" for="reportDay">Day</label><input id="reportDay" type="date" class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-950"></div>
+      <div><label class="mb-1 block text-xs font-semibold" for="reportMonth">Month</label><div class="flex gap-1"><button id="prevMonth" type="button" class="action-btn rounded-xl bg-slate-100 px-3 text-xs font-bold dark:bg-slate-800">‹</button><input id="reportMonth" type="month" class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-950"><button id="nextMonth" type="button" class="action-btn rounded-xl bg-slate-100 px-3 text-xs font-bold dark:bg-slate-800">›</button></div></div>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <button id="dailyReportBtn" class="action-btn rounded-xl bg-indigo-600 px-3 py-2 text-xs font-bold text-white">Daily Report</button>
+      <button id="monthlyReportBtn" class="action-btn rounded-xl bg-violet-600 px-3 py-2 text-xs font-bold text-white">Monthly Report</button>
+      <button id="excelDailyBtn" class="action-btn rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white">⇩ Daily Excel</button>
+      <button id="excelMonthlyBtn" class="action-btn rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white">⇩ Monthly Excel</button>
+      <button id="excelAllBtn" class="action-btn rounded-xl bg-slate-700 px-3 py-2 text-xs font-bold text-white">⇩ All Excel</button>
+    </div>
+  </section>
+
+</main>
+
+<div id="toast" class="toast fixed bottom-5 left-1/2 z-[100] -translate-x-1/2 rounded-2xl bg-slate-950 px-4 py-3 text-xs font-semibold text-white shadow-2xl"></div>
+
+<!-- Transaction modal -->
+<div id="txModal" class="modal fixed inset-0 z-50 grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+ <div class="modal-card max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-5 shadow-2xl dark:bg-slate-900 sm:p-6">
+  <div class="mb-5 flex items-center justify-between"><div><p id="modalEyebrow" class="text-[10px] font-bold uppercase tracking-widest text-indigo-500">Transaction</p><h3 id="modalTitle" class="text-lg font-extrabold">Add Entry</h3></div><button data-close="txModal" class="grid h-9 w-9 place-items-center rounded-xl bg-slate-100 text-lg dark:bg-slate-800">×</button></div>
+  <form id="txForm" class="space-y-4">
+   <input id="editId" type="hidden">
+   <input id="receiptData" type="hidden">
+   <div class="grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1 dark:bg-slate-800"><button type="button" id="expenseTab" class="rounded-xl bg-rose-500 py-2.5 text-xs font-bold text-white">− Expense</button><button type="button" id="incomeTab" class="rounded-xl py-2.5 text-xs font-bold text-slate-600 dark:text-slate-300">＋ Income</button></div>
+   <input id="txType" type="hidden" value="expense">
+   <div><label class="mb-1 block text-xs font-semibold">Amount (₹)</label><input id="amount" type="number" min="0.01" step="0.01" inputmode="decimal" required class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-950" placeholder="0.00"></div>
+   <div class="grid gap-4 sm:grid-cols-2"><div><label class="mb-1 block text-xs font-semibold">Category</label><select id="category" required class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-950"></select></div><div><label class="mb-1 block text-xs font-semibold">Date</label><input id="date" type="date" required class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-950"></div></div>
+   <div><label class="mb-1 block text-xs font-semibold">Notes / Reason</label><input id="notes" maxlength="120" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-950" placeholder="e.g. Grocery bill"></div>
+   <div><label class="mb-1 block text-xs font-semibold">Bill / Receipt</label><input id="file" type="file" accept="image/*" class="hidden"><input id="cameraFile" type="file" accept="image/*" capture="environment" class="hidden"><div class="grid grid-cols-2 gap-2"><button type="button" id="fileBtn" class="rounded-xl border border-dashed border-indigo-300 bg-indigo-50 px-3 py-4 text-xs font-bold text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950/30 dark:text-indigo-300">📁 Choose from files</button><button type="button" id="cameraBtn" class="rounded-xl border border-dashed border-indigo-300 bg-indigo-50 px-3 py-4 text-xs font-bold text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950/30 dark:text-indigo-300">📷 Camera</button></div><div id="preview" class="mt-2 hidden items-center gap-3 rounded-xl bg-slate-50 p-2 dark:bg-slate-950"><img id="previewImg" class="h-14 w-14 rounded-lg object-cover"><div class="min-w-0 flex-1"><p id="previewName" class="truncate text-xs font-bold"></p><p class="text-[10px] text-emerald-600">Receipt attached</p></div><button type="button" id="removeFile" class="rounded-lg px-2 py-1 text-rose-600">Remove</button></div></div>
+   <div class="flex gap-2 border-t border-slate-100 pt-4 dark:border-slate-800"><button type="button" data-close="txModal" class="flex-1 rounded-xl bg-slate-100 py-2.5 text-xs font-bold dark:bg-slate-800">Cancel</button><button id="saveBtn" class="flex-1 rounded-xl bg-indigo-600 py-2.5 text-xs font-bold text-white shadow-lg shadow-indigo-500/20">Save Entry</button></div>
+  </form>
+ </div>
+</div>
+
+<!-- Confirm modal -->
+<div id="confirmModal" class="modal fixed inset-0 z-[60] grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true">
+ <div class="modal-card w-full max-w-sm rounded-3xl bg-white p-5 shadow-2xl dark:bg-slate-900"><div class="mb-4 grid h-11 w-11 place-items-center rounded-2xl bg-rose-100 text-rose-600 dark:bg-rose-950/50">!</div><h3 id="confirmTitle" class="text-lg font-extrabold">Delete entry?</h3><p id="confirmText" class="mt-1 text-xs leading-5 text-slate-500">This action cannot be undone.</p><div class="mt-5 flex gap-2"><button data-close="confirmModal" class="flex-1 rounded-xl bg-slate-100 py-2.5 text-xs font-bold dark:bg-slate-800">Cancel</button><button id="confirmDelete" class="flex-1 rounded-xl bg-rose-600 py-2.5 text-xs font-bold text-white">Delete</button></div></div>
+</div>
+
+<!-- Image modal -->
+<div id="imageModal" class="modal fixed inset-0 z-[70] grid place-items-center bg-slate-950/90 p-4" role="dialog"><div class="relative max-h-[92vh] max-w-4xl"><button data-close="imageModal" class="absolute -right-2 -top-11 grid h-9 w-9 place-items-center rounded-xl bg-white/10 text-xl text-white">×</button><img id="fullImage" class="max-h-[88vh] max-w-full rounded-2xl object-contain"></div></div>
+
+<!-- Backup modal -->
+<div id="backupModal" class="modal fixed inset-0 z-50 grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm" role="dialog">
+ <div class="modal-card w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl dark:bg-slate-900"><div class="mb-5 flex items-center justify-between"><h3 class="text-lg font-extrabold">Backup & Restore</h3><button data-close="backupModal" class="grid h-9 w-9 place-items-center rounded-xl bg-slate-100 dark:bg-slate-800">×</button></div><div class="space-y-3"><button id="shareBackup" class="w-full rounded-xl bg-sky-600 py-3 text-xs font-bold text-white">Save / Share backup to Google Drive</button><button id="downloadBackup" class="w-full rounded-xl bg-emerald-600 py-3 text-xs font-bold text-white">Download JSON Backup</button><button id="restoreBtn" class="w-full rounded-xl bg-indigo-600 py-3 text-xs font-bold text-white">Restore JSON Backup</button><input id="restoreFile" type="file" accept=".json,application/json" class="hidden"><p class="text-[10px] leading-5 text-slate-500">Backup includes transactions and receipt images. Keep a copy outside the browser.</p></div></div>
+</div>
+
+<!-- Share modal -->
+<div id="shareModal" class="modal fixed inset-0 z-50 grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm" role="dialog">
+ <div class="modal-card w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl dark:bg-slate-900"><div class="mb-5 flex items-center justify-between"><h3 class="text-lg font-extrabold">Ledger</h3><button data-close="shareModal" class="grid h-9 w-9 place-items-center rounded-xl bg-slate-100 dark:bg-slate-800">×</button></div><label class="mb-1 block text-xs font-bold">Current Ledger Code</label><div class="flex gap-2"><input id="ledgerInput" readonly class="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-950"><button id="copyLedger" class="rounded-xl bg-indigo-600 px-3 text-xs font-bold text-white">Copy</button></div><div class="my-5 border-t border-slate-100 dark:border-slate-800"></div><label class="mb-1 block text-xs font-bold">Switch local ledger</label><div class="flex gap-2"><input id="joinInput" class="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-950" placeholder="ledger_xxxxxx"><button id="joinLedger" class="rounded-xl bg-emerald-600 px-3 text-xs font-bold text-white">Open</button></div><div id="savedLedgers" class="mt-3 flex flex-wrap gap-2"></div><button id="newLedger" class="mt-4 w-full rounded-xl border border-slate-200 py-2.5 text-xs font-bold dark:border-slate-700">＋ New personal ledger</button></div>
+</div>
+
+
+<!-- Reports modal -->
+<div id="reportModal" class="modal fixed inset-0 z-[55] grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true">
+  <div class="modal-card max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-3xl bg-white p-5 shadow-2xl dark:bg-slate-900 sm:p-6">
+    <div class="mb-5 flex items-center justify-between gap-3">
+      <h3 id="reportTitle" class="text-lg font-extrabold">Report</h3>
+      <button data-close="reportModal" class="grid h-9 w-9 place-items-center rounded-xl bg-slate-100 text-lg dark:bg-slate-800">×</button>
+    </div>
+    <div id="reportBody"></div>
+  </div>
+</div>
+
+<script>
+(() => {
+"use strict";
+const $ = id => document.getElementById(id);
+const CATS = {
+ expense:["Master Salary","Helper Salary","Counter Cashier Salary","Cleaning Salary","Groceries PatnamBazar","Oil&etc","Chicken","Vegetables","Prawns"],
+ income:["Counter Amount"]
+};
+const TE = {"Master Salary":"మాస్టర్ జీతం","Helper Salary":"హెల్పర్ జీతం","Counter Cashier Salary":"కౌంటర్ క్యాషియర్ జీతం","Cleaning Salary":"క్లీనింగ్ జీతం","Groceries PatnamBazar":"కిరాణా పట్నం బజార్","Oil&etc":"నూనె & ఇతరాలు","Chicken":"చికెన్","Vegetables":"కూరగాయలు","Prawns":"రొయ్యలు","Counter Amount":"కౌంటర్ అమౌంట్"};
+const KEY = "dailytracker_pro_ledger";
+const LSget=k=>{try{return localStorage.getItem(k)}catch{return null}};
+const LSset=(k,v)=>{try{localStorage.setItem(k,v);return true}catch{return false}};
+const newCode=()=>"ledger_"+Math.random().toString(36).slice(2,8);
+let lang = LSget("dt_lang") || "en";
+let ledger = LSget(KEY) || newCode();
+let tx = [];
+
+/* ---------- Durable storage: IndexedDB (primary) + localStorage (mirror) ---------- */
+let dbp=null;
+function idb(){
+ if(dbp)return dbp;
+ dbp=new Promise(res=>{try{const r=indexedDB.open("dailytracker_pro",1);r.onupgradeneeded=()=>r.result.createObjectStore("kv");r.onsuccess=()=>res(r.result);r.onerror=()=>res(null);r.onblocked=()=>res(null)}catch{res(null)}});
+ return dbp;
+}
+async function idbGet(k){const db=await idb();if(!db)return undefined;return new Promise(res=>{try{const q=db.transaction("kv").objectStore("kv").get(k);q.onsuccess=()=>res(q.result);q.onerror=()=>res(undefined)}catch{res(undefined)}})}
+async function idbSet(k,v){const db=await idb();if(!db)return false;return new Promise(res=>{try{const t=db.transaction("kv","readwrite");t.objectStore("kv").put(v,k);t.oncomplete=()=>res(true);t.onerror=t.onabort=()=>res(false)}catch{res(false)}})}
+function lsRec(code){
+ const raw=LSget("dt_data_"+code);if(raw===null)return null;
+ try{return{tx:JSON.parse(raw)||[],updatedAt:Number(LSget("dt_upd_"+code))||0}}catch{return null}
+}
+async function readLedger(code){
+ const a=await idbGet("data_"+code),b=lsRec(code);
+ if(a&&Array.isArray(a.tx)&&b)return (a.updatedAt||0)>=(b.updatedAt||0)?a:b;
+ return (a&&Array.isArray(a.tx))?a:b;
+}
+async function getLedgers(){
+ let l=[];try{l=JSON.parse(LSget("dt_ledgers")||"[]")}catch{}
+ const d=await idbGet("ledgers");if(Array.isArray(d))l=l.concat(d);
+ if(ledger)l.push(ledger);
+ return [...new Set(l)].filter(x=>/^ledger_[a-z0-9]{3,30}$/i.test(x));
+}
+async function registerLedger(code){
+ const l=await getLedgers();if(!l.includes(code))l.push(code);
+ LSset("dt_ledgers",JSON.stringify(l));await idbSet("ledgers",l);
+}
+function setLedger(code){ledger=code;LSset(KEY,code);idbSet("last",code);registerLedger(code)}
+function load(){return tx}
+let saveChain=Promise.resolve();
+function save(){
+ const rec={tx:tx,updatedAt:Date.now()},code=ledger;
+ if(LSset("dt_data_"+code,JSON.stringify(tx)))LSset("dt_upd_"+code,String(rec.updatedAt));
+ LSset(KEY,code);
+ saveChain=saveChain.then(async()=>{const ok=await idbSet("data_"+code,rec);await idbSet("last",code);await registerLedger(code);return ok}).catch(()=>{});
+ return saveChain;
+}
+async function boot(){
+ try{if(navigator.storage&&navigator.storage.persist)await navigator.storage.persist()}catch{}
+ const last=await idbGet("last");
+ if(last&&/^ledger_[a-z0-9]{3,30}$/i.test(last))ledger=last;
+ const rec=await readLedger(ledger);
+ tx=rec&&Array.isArray(rec.tx)?rec.tx:[];
+ await save();               // make sure both stores hold the same, latest copy
+ init();
+}
+async function renderSaved(){
+ const box=$("savedLedgers");if(!box)return;
+ const l=(await getLedgers()).filter(x=>x!==ledger);
+ box.innerHTML=l.length?`<div class="w-full text-[10px] font-bold opacity-60">${t("Saved on this device","ఈ పరికరంలో సేవ్ అయినవి")}</div>`+l.map(x=>`<button type="button" data-open-ledger="${esc(x)}" class="rounded-lg border border-slate-200 px-2 py-1 font-mono text-[11px] dark:border-slate-700">${esc(x)}</button>`).join(""):"";
+}
+async function openLedger(v){
+ if(!/^ledger_[a-z0-9]{3,30}$/i.test(v)){toast(t("Invalid ledger code.","లెడ్జర్ కోడ్ సరిగ్గా లేదు."));return}
+ const rec=await readLedger(v);
+ if(!rec){toast(t("No data for this code in this browser. Use Backup > Restore with your backup file.","ఈ బ్రౌజర్‌లో ఈ కోడ్ డేటా లేదు. బ్యాకప్ ఫైల్ రీస్టోర్ చేయండి."));closeModal("shareModal");openModal("backupModal");return}
+ await save();                // keep the ledger we are leaving safe
+ tx=rec.tx;setLedger(v);await save();
+ $("ledgerCode").textContent=`Ledger: ${ledger}`;$("ledgerInput").value=ledger;closeModal("shareModal");render();toast(t("Ledger opened.","లెడ్జర్ ఓపెన్ అయింది."));
+}
+let charts = {cat:null, month:null};
+let pendingDelete = null;
+let toastTimer = null;
+
+function today(){const d=new Date(); return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10)}
+function money(n){return "₹"+Number(n||0).toLocaleString("en-IN",{maximumFractionDigits:2})}
+function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function t(en,te){return lang==="te"?te:en}
+function toast(msg){clearTimeout(toastTimer);$("toast").textContent=msg;$("toast").classList.add("show");toastTimer=setTimeout(()=>$("toast").classList.remove("show"),2400)}
+function openModal(id){const m=$(id);if(!m)return;m.classList.add("is-open");document.body.classList.add("no-scroll");setTimeout(()=>{const f=m.querySelector("input:not([type=hidden]),select,button");if(f)f.focus()},30)}
+function closeModal(id){const m=$(id);if(!m)return;m.classList.remove("is-open");if(!document.querySelector(".modal.is-open"))document.body.classList.remove("no-scroll")}
+function setType(type){
+ $("txType").value=type;
+ $("expenseTab").className=type==="expense"?"rounded-xl bg-rose-500 py-2.5 text-xs font-bold text-white":"rounded-xl py-2.5 text-xs font-bold text-slate-600 dark:text-slate-300";
+ $("incomeTab").className=type==="income"?"rounded-xl bg-emerald-500 py-2.5 text-xs font-bold text-white":"rounded-xl py-2.5 text-xs font-bold text-slate-600 dark:text-slate-300";
+ $("category").innerHTML=CATS[type].map(c=>`<option value="${esc(c)}">${esc(lang==="te"?TE[c]||c:c)}</option>`).join("");
+}
+function resetReceipt(){ $("receiptData").value=""; $("file").value="";$("cameraFile").value=""; $("preview").classList.add("hidden"); $("preview").classList.remove("flex"); $("previewImg").src=""; $("previewName").textContent=""; }
+function openAdd(){
+ $("txForm").reset();$("editId").value="";$("modalTitle").textContent=t("Add Entry","కొత్త ఎంట్రీ");$("saveBtn").textContent=t("Save Entry","సేవ్ చేయి");$("date").value=today();resetReceipt();setType("expense");openModal("txModal");
+}
+function openEdit(id){
+ const item=tx.find(x=>String(x.id)===String(id));if(!item)return;
+ $("editId").value=item.id;$("modalTitle").textContent=t("Edit Entry","ఎంట్రీ మార్చండి");$("saveBtn").textContent=t("Update Entry","అప్‌డేట్ చేయి");
+ $("amount").value=item.amount;$("date").value=item.date;$("notes").value=item.notes||"";$("receiptData").value=item.receiptData||"";setType(item.type);$("category").value=item.category;
+ if(item.receiptData){$("previewImg").src=item.receiptData;$("previewName").textContent=item.receiptName||"Receipt image";$("preview").classList.remove("hidden");$("preview").classList.add("flex")}
+ else resetReceipt();
+ openModal("txModal");
+}
+function askDelete(id){pendingDelete=id;openModal("confirmModal")}
+async function compressImage(file){
+ return new Promise((resolve,reject)=>{
+  const r=new FileReader();r.onerror=reject;r.onload=()=>{
+   const img=new Image();img.onerror=reject;img.onload=()=>{
+    const max=1500, scale=Math.min(1,max/Math.max(img.width,img.height));const c=document.createElement("canvas");
+    c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+    resolve(c.toDataURL("image/jpeg",.78));
+   };img.src=r.result;
+  };r.readAsDataURL(file);
+ });
+}
+async function saveForm(e){
+ e.preventDefault();
+ const amount=Number($("amount").value);
+ if(!Number.isFinite(amount)||amount<=0){toast(t("Enter a valid amount.","సరైన మొత్తాన్ని నమోదు చేయండి."));return}
+ const id=$("editId").value||crypto.randomUUID();
+ const old=tx.find(x=>String(x.id)===String(id));
+ const item={id,type:$("txType").value,amount,category:$("category").value,date:$("date").value,notes:$("notes").value.trim()||( $("txType").value==="income"?"Income":"Expense"),receiptData:$("receiptData").value||null,receiptName:$("receiptData").value?($("previewName").textContent||old?.receiptName||null):null,timestamp:old?.timestamp||new Date().toISOString(),updatedAt:new Date().toISOString()};
+ if($("editId").value){const i=tx.findIndex(x=>String(x.id)===String(id));if(i>=0)tx[i]=item}
+ else tx.unshift(item);
+ save();closeModal("txModal");render();toast(t("Entry saved successfully.","ఎంట్రీ విజయవంతంగా సేవ్ అయింది."));
+}
+function deleteConfirmed(){
+ if(pendingDelete==null)return;tx=tx.filter(x=>String(x.id)!==String(pendingDelete));save();pendingDelete=null;closeModal("confirmModal");render();toast(t("Entry deleted.","ఎంట్రీ తొలగించబడింది."));
+}
+function filtered(){
+ const q=$("search").value.trim().toLowerCase(), type=$("typeFilter").value, cat=$("catFilter").value, from=$("dateFilter").value, to=$("dateTo").value;
+ return [...tx].filter(x=>(!q||`${x.notes||""} ${x.category||""}`.toLowerCase().includes(q))&& (type==="all"||x.type===type)&&(cat==="all"||x.category===cat)&&(!from||x.date>=from)&&(!to||x.date<=to)).sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(b.timestamp).localeCompare(String(a.timestamp)));
+}
+function renderCats(){
+ const current=$("catFilter").value;$("catFilter").innerHTML=`<option value="all">${t("All categories","అన్ని కేటగిరీలు")}</option>`+[...new Set([...CATS.expense,...CATS.income])].map(c=>`<option value="${esc(c)}">${esc(lang==="te"?TE[c]||c:c)}</option>`).join("");if([...$("catFilter").options].some(o=>o.value===current))$("catFilter").value=current;
+}
+function renderTable(){
+ const list=filtered(), rows=$("rows");rows.innerHTML="";
+ $("resultCount").textContent=`${list.length} ${t("shown","చూపిస్తోంది")}`;
+ $("empty").classList.toggle("hidden",list.length>0);
+ let lastDate=null;
+ list.forEach(x=>{
+  if(x.date!==lastDate){lastDate=x.date;let n=0;list.forEach(y=>{if(y.date===x.date)n+=y.type==="income"?Number(y.amount):-Number(y.amount)});
+   const h=document.createElement("tr");h.className="bg-indigo-50/70 dark:bg-indigo-950/30";h.innerHTML=`<td colspan="7" class="px-4 py-2 text-[11px] font-extrabold text-indigo-700 dark:text-indigo-300">📅 ${esc(x.date)} <span class="ml-2 font-semibold opacity-70">${t("Net","నికరం")}: ${money(n)}</span></td>`;rows.appendChild(h)}
+  const tr=document.createElement("tr");tr.className="hover:bg-slate-50 dark:hover:bg-slate-800/60";
+  const label=lang==="te"?TE[x.category]||x.category:x.category;
+  tr.innerHTML=`<td class="whitespace-nowrap px-4 py-3 font-semibold">${esc(x.date)}</td>
+   <td class="px-4 py-3"><span class="rounded-full px-2 py-1 text-[9px] font-extrabold ${x.type==="expense"?"bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300":"bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"}">${x.type==="expense"?"EXPENSE":"INCOME"}</span></td>
+   <td class="px-4 py-3">${esc(label)}</td><td class="max-w-[220px] truncate px-4 py-3 text-slate-500">${esc(x.notes||"-")}</td>
+   <td class="px-4 py-3 text-center">${x.receiptData?`<button data-view="${esc(x.id)}" class="rounded-lg bg-purple-50 px-2 py-1 text-[10px] font-bold text-purple-700 dark:bg-purple-950/40 dark:text-purple-300">View</button>`:"—"}</td>
+   <td class="px-4 py-3 text-right font-extrabold ${x.type==="expense"?"text-rose-600":"text-emerald-600"}">${x.type==="expense"?"−":"+"}${money(x.amount)}</td>
+   <td class="px-4 py-3 text-center"><div class="flex justify-center gap-1"><button data-edit="${esc(x.id)}" class="action-btn rounded-lg bg-indigo-50 px-2 py-1.5 text-[10px] font-bold text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">Edit</button><button data-delete="${esc(x.id)}" class="action-btn rounded-lg bg-rose-50 px-2 py-1.5 text-[10px] font-bold text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">Delete</button></div></td>`;
+  rows.appendChild(tr);
+ });
+}
+function renderCards(){
+ let income=0,expense=0,receipts=0;tx.forEach(x=>{if(x.type==="income")income+=Number(x.amount)||0;else expense+=Number(x.amount)||0;if(x.receiptData)receipts++});
+ $("incomeCard").textContent=money(income);$("expenseCard").textContent=money(expense);$("balanceCard").textContent=money(income-expense);$("receiptCard").textContent=receipts;
+}
+function renderCharts(){
+ if(typeof Chart==="undefined")return;
+ const dark=document.documentElement.classList.contains("dark");Chart.defaults.color=dark?"#cbd5e1":"#475569";Chart.defaults.borderColor=dark?"#334155":"#e2e8f0";
+ if(!charts.cat){
+  charts.cat=new Chart($("categoryChart"),{type:"doughnut",data:{labels:[],datasets:[{data:[],backgroundColor:["#6366f1","#f43f5e","#10b981","#f59e0b","#06b6d4","#8b5cf6","#ec4899","#84cc16","#64748b"],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"bottom",labels:{boxWidth:10,font:{size:10}}}}}});
+  charts.month=new Chart($("monthlyChart"),{type:"bar",data:{labels:[],datasets:[{label:"Income",data:[],backgroundColor:"#10b981"},{label:"Expense",data:[],backgroundColor:"#f43f5e"}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true}},plugins:{legend:{position:"bottom",labels:{font:{size:10}}}}}});
+ }
+ const cats={};tx.filter(x=>x.type==="expense").forEach(x=>cats[x.category]=(cats[x.category]||0)+Number(x.amount));
+ charts.cat.data.labels=Object.keys(cats).map(x=>lang==="te"?TE[x]||x:x);charts.cat.data.datasets[0].data=Object.values(cats);charts.cat.update();
+ const months={};tx.forEach(x=>{const m=(x.date||"").slice(0,7);if(!m)return;months[m]??={income:0,expense:0};months[m][x.type]+=Number(x.amount)||0});
+ const ms=Object.keys(months).sort();charts.month.data.labels=ms;charts.month.data.datasets[0].data=ms.map(m=>months[m].income);charts.month.data.datasets[1].data=ms.map(m=>months[m].expense);charts.month.update();
+}
+function render(){renderCats();renderCards();renderTable();renderCharts();if(typeof updateReportSummary==="function")updateReportSummary()}
+function csvCell(v){return `"${String(v??"").replace(/"/g,'""')}"`}
+async function dlFile(name,data,mime){
+ let d=null;try{d=window.claude&&await window.claude.use("downloads")}catch{}
+ if(d){try{await d.save({filename:name,data});return true}catch(e){if(e&&e.code==="declined")return false}}
+ const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([data],{type:mime||"application/octet-stream"}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1500);return true;
+}
+function exportCSV(){
+ if(!tx.length){toast(t("Nothing to export.","ఎగుమతి చేయడానికి డేటా లేదు."));return}
+ const csv=[["Date","Type","Category","Notes","Amount (INR)"],...tx.map(x=>[x.date,x.type,x.category,x.notes||"",x.amount])].map(r=>r.map(csvCell).join(",")).join("\n");
+ dlFile(`dailytracker_${ledger}.csv`,"\ufeff"+csv,"text/csv;charset=utf-8");
+}
+function downloadBackup(){
+ const payload={version:2,ledger,exportedAt:new Date().toISOString(),transactions:tx};
+ dlFile(`dailytracker_backup_${ledger}.json`,JSON.stringify(payload,null,2),"application/json").then(ok=>{if(ok){LSset("dt_lastbackup",String(Date.now()));toast(t("Backup saved.","బ్యాకప్ సేవ్ అయింది."))}});
+}
+async function shareBackup(){
+ const payload={version:2,ledger,exportedAt:new Date().toISOString(),transactions:tx};
+ const file=new File([JSON.stringify(payload)],`dailytracker_backup_${ledger}.json`,{type:"application/json"});
+ try{
+  if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:"DailyTracker backup"});LSset("dt_lastbackup",String(Date.now()));toast(t("Backup shared.","బ్యాకప్ షేర్ అయింది."))}
+  else downloadBackup();
+ }catch(err){if(err&&err.name!=="AbortError")downloadBackup()}
+}
+function restoreBackup(e){
+ const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{
+  try{const p=JSON.parse(r.result),list=Array.isArray(p)?p:p.transactions;if(!Array.isArray(list))throw 0;
+   if(p&&p.ledger&&/^ledger_[a-z0-9]{3,30}$/i.test(p.ledger)){setLedger(p.ledger);$("ledgerCode").textContent=`Ledger: ${ledger}`;$("ledgerInput").value=ledger}tx=list.map(x=>({...x,id:String(x.id||crypto.randomUUID())}));save();closeModal("backupModal");render();toast(t("Backup restored.","బ్యాకప్ రీస్టోర్ అయింది."));
+  }catch{toast(t("Invalid backup file.","చెల్లని బ్యాకప్ ఫైల్."))}
+  e.target.value="";
+ };r.readAsText(f);
+}
+function applyLang(){
+ $("langBtn").textContent=lang==="te"?"English":"తెలుగు";$("addLabel").textContent=t("Add Entry","ఎంట్రీ జోడించు");$("ledgerTitle").textContent=t("Your Daily Money Dashboard","మీ రోజువారీ మనీ డ్యాష్‌బోర్డ్");
+ $("incomeLabel").textContent=t("Income","ఆదాయం");$("expenseLabel").textContent=t("Expenses","ఖర్చులు");$("balanceLabel").textContent=t("Balance","బ్యాలెన్స్");$("receiptLabel").textContent=t("Receipts","రసీదులు");$("catChartTitle").textContent=t("Expense by Category","కేటగిరీ వారీ ఖర్చులు");$("monthChartTitle").textContent=t("Monthly Trend","నెలవారీ ట్రెండ్");$("historyTitle").textContent=t("Transactions","లావాదేవీలు");$("emptyTitle").textContent=t("No transactions","లావాదేవీలు లేవు");$("emptyText").textContent=t("Add your first income or expense.","మీ మొదటి ఆదాయం లేదా ఖర్చును జోడించండి.");$("search").placeholder=t("Search notes or category","వివరాలు లేదా కేటగిరీ వెతకండి");
+ render();
+}
+function init(){
+ $("ledgerCode").textContent=`Ledger: ${ledger}`;$("ledgerInput").value=ledger;
+  $("themeBtn").textContent=document.documentElement.classList.contains("dark")?"☀":"☾";
+ $("addBtn").onclick=openAdd;$("backupBtn").onclick=()=>openModal("backupModal");$("shareBtn").onclick=()=>{renderSaved();openModal("shareModal")};$("langBtn").onclick=()=>{lang=lang==="te"?"en":"te";LSset("dt_lang",lang);applyLang()};
+ $("themeBtn").onclick=()=>{const d=document.documentElement.classList.toggle("dark");LSset("dt_theme",d?"dark":"light");$("themeBtn").textContent=d?"☀":"☾";document.querySelector('meta[name=theme-color]').content=d?"#0f172a":"#4f46e5";["cat","month"].forEach(k=>{if(charts[k]){charts[k].destroy();charts[k]=null}});renderCharts()};
+ $("expenseTab").onclick=()=>setType("expense");$("incomeTab").onclick=()=>setType("income");$("txForm").onsubmit=saveForm;
+ $("fileBtn").onclick=()=>$("file").click();$("cameraBtn").onclick=()=>$("cameraFile").click();$("file").onchange=$("cameraFile").onchange=async e=>{const f=e.target.files[0];if(!f)return;if(!f.type.startsWith("image/")){toast("Please choose an image.");return}try{$("receiptData").value=await compressImage(f);$("previewImg").src=$("receiptData").value;$("previewName").textContent=f.name;$("preview").classList.remove("hidden");$("preview").classList.add("flex")}catch{toast("Could not read image.")}};
+ $("removeFile").onclick=resetReceipt;
+ ["search","typeFilter","catFilter","dateFilter"].forEach(id=>$(id).addEventListener("input",renderTable));
+ $("exportBtn").onclick=exportCSV;$("downloadBackup").onclick=downloadBackup;$("shareBackup").onclick=shareBackup;$("restoreBtn").onclick=()=>$("restoreFile").click();$("restoreFile").onchange=restoreBackup;
+ $("copyLedger").onclick=async()=>{try{await navigator.clipboard.writeText(ledger)}catch{$("ledgerInput").select();document.execCommand("copy")}toast(t("Ledger code copied.","లెడ్జర్ కోడ్ కాపీ అయింది."))};
+ $("joinLedger").onclick=()=>openLedger($("joinInput").value.trim());
+ $("savedLedgers").addEventListener("click",e=>{const b=e.target.closest("[data-open-ledger]");if(b)openLedger(b.dataset.openLedger)});
+ $("newLedger").onclick=()=>{$("joinInput").value="";save();setLedger(newCode());tx=[];save();$("ledgerCode").textContent=`Ledger: ${ledger}`;$("ledgerInput").value=ledger;closeModal("shareModal");render();toast(t("New ledger created.","కొత్త లెడ్జర్ క్రియేట్ అయింది."))};
+ $("confirmDelete").onclick=deleteConfirmed;
+ document.addEventListener("click",e=>{const c=e.target.closest("[data-close]");if(c)closeModal(c.dataset.close);const ed=e.target.closest("[data-edit]");if(ed)openEdit(ed.dataset.edit);const del=e.target.closest("[data-delete]");if(del)askDelete(del.dataset.delete);const view=e.target.closest("[data-view]");if(view){const x=tx.find(i=>String(i.id)===String(view.dataset.view));if(x){$("fullImage").src=x.receiptData;openModal("imageModal")}}});
+ document.querySelectorAll(".modal").forEach(m=>m.addEventListener("click",e=>{if(e.target===m)closeModal(m.id)}));
+ document.addEventListener("keydown",e=>{if(e.key==="Escape")document.querySelectorAll(".modal.is-open").forEach(m=>closeModal(m.id))});
+ $("date").addEventListener("click",()=>{try{$("date").showPicker()}catch{}});
+ $("dateTo").addEventListener("input",renderTable);
+ $("clearFilters").onclick=()=>{["search","dateFilter","dateTo"].forEach(i=>$(i).value="");$("typeFilter").value="all";$("catFilter").value="all";renderTable()};
+ $("reportDay").value=today();$("reportMonth").value=today().slice(0,7);
+ $("dailyReportBtn").onclick=openDailyReport;$("monthlyReportBtn").onclick=openMonthlyReport;
+ $("excelDailyBtn").onclick=()=>downloadExcel("daily");$("excelMonthlyBtn").onclick=()=>downloadExcel("monthly");$("excelAllBtn").onclick=()=>downloadExcel("all");
+ $("prevMonth").onclick=()=>shiftMonth(-1);$("nextMonth").onclick=()=>shiftMonth(1);
+ $("reportDay").addEventListener("change",updateReportSummary);$("reportMonth").addEventListener("change",updateReportSummary);
+ applyLang();setType("expense");
+}
+
+// ===== Reports & Excel (inside app scope) =====
+const repRows=()=>tx.map(r=>({date:r.date||"",type:r.type==="income"?"income":"expense",category:r.category||"Uncategorized",notes:r.notes||"",amount:Number(r.amount)||0,receipt:r.receiptData?"Yes":"No"})).sort((a,b)=>b.date.localeCompare(a.date));
+const repDay=()=>$("reportDay").value||today(), repMonth=()=>$("reportMonth").value||today().slice(0,7);
+function sum(rows){const s={income:0,expense:0,count:rows.length,cats:{}};rows.forEach(r=>{if(r.type==="income")s.income+=r.amount;else{s.expense+=r.amount;s.cats[r.category]=(s.cats[r.category]||0)+r.amount}});s.balance=s.income-s.expense;return s}
+function group(rows,keyFn,label){const m={};rows.forEach(r=>{const k=keyFn(r);const d=m[k]??={[label]:k,Income:0,Expense:0,Balance:0,Transactions:0};if(r.type==="income")d.Income+=r.amount;else d.Expense+=r.amount;d.Balance=d.Income-d.Expense;d.Transactions++});return Object.values(m).sort((a,b)=>b[label].localeCompare(a[label]))}
+function repCards(s){return `<div class="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+ <div class="rounded-xl bg-emerald-500/10 p-4"><div class="text-xs opacity-70">${t("Income","ఆదాయం")}</div><div class="text-lg font-bold text-emerald-600">${money(s.income)}</div></div>
+ <div class="rounded-xl bg-rose-500/10 p-4"><div class="text-xs opacity-70">${t("Expenses","ఖర్చులు")}</div><div class="text-lg font-bold text-rose-600">${money(s.expense)}</div></div>
+ <div class="rounded-xl bg-blue-500/10 p-4"><div class="text-xs opacity-70">${t("Balance","బ్యాలెన్స్")}</div><div class="text-lg font-bold">${money(s.balance)}</div></div>
+ <div class="rounded-xl bg-violet-500/10 p-4"><div class="text-xs opacity-70">${t("Transactions","లావాదేవీలు")}</div><div class="text-lg font-bold">${s.count}</div></div></div>`}
+function openReport(title,body){$("reportTitle").textContent=title;$("reportBody").innerHTML=body;openModal("reportModal")}
+const none=(n,m)=>`<tr><td colspan="${n}" class="p-6 text-center opacity-60">${m}</td></tr>`;
+function openDailyReport(){
+ const d=repDay(),rows=repRows().filter(r=>r.date===d),s=sum(rows);
+ openReport(`${t("Daily Report","రోజువారీ రిపోర్ట్")} — ${d}`,repCards(s)+`<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr><th class="p-2 text-left">Date</th><th class="p-2 text-left">Type</th><th class="p-2 text-left">Category</th><th class="p-2 text-left">Notes</th><th class="p-2 text-right">Amount</th></tr></thead><tbody>${rows.length?rows.map(r=>`<tr class="border-t border-slate-200 dark:border-slate-800"><td class="p-2">${esc(r.date)}</td><td class="p-2">${r.type}</td><td class="p-2">${esc(r.category)}</td><td class="p-2">${esc(r.notes)}</td><td class="p-2 text-right">${money(r.amount)}</td></tr>`).join(""):none(5,t("No transactions for this day.","ఈ రోజు లావాదేవీలు లేవు."))}</tbody></table></div>`);
+}
+function openMonthlyReport(){
+ const m=repMonth(),rows=repRows().filter(r=>r.date.startsWith(m)),s=sum(rows),cats=Object.entries(s.cats).sort((a,b)=>b[1]-a[1]),days=group(rows,r=>r.date,"Date");
+ openReport(`${t("Monthly Report","నెలవారీ రిపోర్ట్")} — ${m}`,repCards(s)+`<div class="grid gap-5 md:grid-cols-2">
+ <div class="rounded-xl border border-slate-200 p-4 dark:border-slate-800"><h4 class="mb-3 font-bold">${t("Category-wise Expenses","కేటగిరీ వారీ ఖర్చులు")}</h4>${cats.length?cats.map(([c,v])=>`<div class="flex justify-between border-b border-slate-200 py-2 dark:border-slate-800"><span>${esc(lang==="te"?TE[c]||c:c)}</span><b>${money(v)}</b></div>`).join(""):'<div class="opacity-60">—</div>'}</div>
+ <div class="rounded-xl border border-slate-200 p-4 dark:border-slate-800"><h4 class="mb-3 font-bold">${t("Day-wise Summary","రోజు వారీ సారాంశం")}</h4><div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr><th class="p-2 text-left">Date</th><th class="p-2 text-right">Income</th><th class="p-2 text-right">Expense</th><th class="p-2 text-right">Balance</th></tr></thead><tbody>${days.length?days.map(d=>`<tr class="border-t border-slate-200 dark:border-slate-800"><td class="p-2">${esc(d.Date)}</td><td class="p-2 text-right">${money(d.Income)}</td><td class="p-2 text-right">${money(d.Expense)}</td><td class="p-2 text-right">${money(d.Balance)}</td></tr>`).join(""):none(4,t("No transactions this month.","ఈ నెల లావాదేవీలు లేవు."))}</tbody></table></div></div></div>`);
+}
+function shiftMonth(n){const [y,m]=repMonth().split("-").map(Number),d=new Date(y,m-1+n,1);$("reportMonth").value=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;updateReportSummary()}
+const xRows=rows=>rows.map(r=>({Date:r.date,Type:r.type==="income"?"Income":"Expense",Category:r.category,Notes:r.notes,Amount:r.amount,Receipt:r.receipt}));
+function sheet(wb,data,name){const s=XLSX.utils.json_to_sheet(data);s["!cols"]=Object.keys(data[0]||{}).map(k=>({wch:k==="Notes"?32:Math.max(13,k.length+3)}));XLSX.utils.book_append_sheet(wb,s,name)}
+function downloadExcel(kind){
+ if(typeof XLSX==="undefined"){toast(t("Excel library not loaded. Check internet.","Excel లైబ్రరీ లోడ్ కాలేదు. ఇంటర్నెట్ చూడండి."));return}
+ let rows=repRows(),wb=XLSX.utils.book_new(),name;
+ if(kind==="daily"){const d=repDay();rows=rows.filter(r=>r.date===d);if(!rows.length){toast(t("No transactions for "+d,d+" కి లావాదేవీలు లేవు"));return}
+  sheet(wb,xRows(rows),"Daily Report");name="Daily_"+d}
+ else if(kind==="monthly"){const m=repMonth();rows=rows.filter(r=>r.date.startsWith(m));if(!rows.length){toast(t("No transactions for "+m,m+" కి లావాదేవీలు లేవు"));return}
+  const s=sum(rows);sheet(wb,[{Month:m,Income:s.income,Expense:s.expense,Balance:s.balance,Transactions:s.count}],"Summary");
+  sheet(wb,xRows(rows),"Transactions");
+  const c=Object.entries(s.cats).sort((a,b)=>b[1]-a[1]).map(([k,v])=>({Category:k,"Expense Total":v}));if(c.length)sheet(wb,c,"Category Summary");
+  sheet(wb,group(rows,r=>r.date,"Date"),"Day-wise Summary");name="Monthly_"+m}
+ else{if(!rows.length){toast(t("Nothing to export.","ఎగుమతి చేయడానికి డేటా లేదు."));return}
+  sheet(wb,xRows(rows),"All Transactions");sheet(wb,group(rows,r=>r.date,"Date"),"Daily Summary");sheet(wb,group(rows,r=>r.date.slice(0,7),"Month"),"Monthly Summary");name="All_"+today()}
+ dlFile(`DailyTracker_${name}.xlsx`,XLSX.write(wb,{bookType:"xlsx",type:"array"}),"application/octet-stream").then(ok=>{if(ok)toast(t("Excel saved.","Excel సేవ్ అయింది."))});
+}
+function updateReportSummary(){
+ const el=$("reportSummary");if(!el||!$("reportDay"))return;
+ const rows=repRows(),d=sum(rows.filter(r=>r.date===repDay())),m=sum(rows.filter(r=>r.date.startsWith(repMonth())));
+ const c=(l,v)=>`<div class="rounded-xl border border-slate-200 p-3 dark:border-slate-700"><div class="text-[10px] opacity-60">${l}</div><b class="text-sm">${money(v)}</b></div>`;
+ el.innerHTML=c(t("Day Income","రోజు ఆదాయం"),d.income)+c(t("Day Expense","రోజు ఖర్చు"),d.expense)+c(t("Month Expense","నెల ఖర్చు"),m.expense)+c(t("Month Balance","నెల బ్యాలెన్స్"),m.balance);
+}
+window.openEdit=openEdit;window.askDelete=askDelete;window.getTrackerTransactions=()=>tx;
+document.addEventListener("DOMContentLoaded",boot);
+})();
+
+</script>
+</body>
+</html>
